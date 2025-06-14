@@ -3,7 +3,6 @@ import CONFIG from '../config.js';
 
 // Create axios instance
 const apiClient = axios.create({
-  baseURL: CONFIG.BASE_URL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -13,7 +12,12 @@ const apiClient = axios.create({
 
 // Request interceptor untuk attach token
 apiClient.interceptors.request.use(
-  (config) => {
+    async (config) => {
+    // Set baseURL secara dinamis - TAMBAH INI
+    if (!config.baseURL) {
+      config.baseURL = await CONFIG.getBaseURL();
+    }
+
     const token = getToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -30,8 +34,30 @@ apiClient.interceptors.response.use(
   (response) => {
     return response;
   },
-  (error) => {
-    // Auto logout jika token expired atau unauthorized
+  async (error) => {
+    // TAMBAH INI - Handle connection errors
+    if (error.code === 'ECONNABORTED' || 
+        error.code === 'ENOTFOUND' || 
+        error.code === 'ECONNREFUSED' ||
+        !error.response) {
+      
+      const originalRequest = error.config;
+      
+      // Jangan retry kalau sudah pernah retry
+      if (!originalRequest._retry) {
+        originalRequest._retry = true;
+        
+        // Switch ke URL berikutnya
+        CONFIG.switchToNext();
+        const newURL = await CONFIG.getBaseURL();
+        
+        console.log(`🔄 Retrying with: ${newURL}`);
+        originalRequest.baseURL = newURL;
+        return apiClient(originalRequest);
+      }
+    }
+    
+    // Yang lama tetap ada - Auto logout jika token expired atau unauthorized
     if (error.response?.status === 401) {
       console.log('Token expired, logging out...');
       forceLogout();

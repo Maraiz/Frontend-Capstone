@@ -3,6 +3,10 @@
 .vscode
 node_modules
 dist
+uploads
 
 # Files
 .env
+
+# Local Netlify folder
+.netlify
